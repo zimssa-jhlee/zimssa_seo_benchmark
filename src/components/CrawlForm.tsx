@@ -15,7 +15,8 @@ export default function CrawlForm({ onStart, isLoading }: CrawlFormProps) {
     e.preventDefault();
     if (!url.trim()) return;
     let fullUrl = url.trim();
-    if (!fullUrl.startsWith('http')) fullUrl = `https://${fullUrl}`;
+    if (fullUrl.startsWith('http://')) fullUrl = fullUrl.replace('http://', 'https://');
+    else if (!fullUrl.startsWith('https://')) fullUrl = `https://${fullUrl}`;
     onStart(fullUrl, { depth, maxPages });
   };
 

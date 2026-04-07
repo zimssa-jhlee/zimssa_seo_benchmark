@@ -122,9 +122,17 @@ export async function startCrawl(sessionId: string, startUrl: string, options: C
           }
         });
 
-        const response = await page.goto(normalizedUrl, {
+        let response = await page.goto(normalizedUrl, {
           waitUntil: 'networkidle',
           timeout: 30000,
+        }).catch(async (err) => {
+          // Fallback: http → https
+          if (normalizedUrl.startsWith('http://')) {
+            const httpsUrl = normalizedUrl.replace('http://', 'https://');
+            console.log(`[Crawl] Retrying with HTTPS: ${httpsUrl}`);
+            return page.goto(httpsUrl, { waitUntil: 'networkidle', timeout: 30000 });
+          }
+          throw err;
         });
 
         // Wait for dynamic content
