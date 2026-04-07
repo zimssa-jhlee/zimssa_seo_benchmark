@@ -210,17 +210,19 @@ export async function analyzeSearchIntent(context: SearchIntentContext): Promise
     aiResults = inferAdditionalQueries(context);
   }
 
-  // 병합: guaranteed 최상위, AI 중복 제거 후 추가
-  const seen = new Set(guaranteed.map(g => g.query));
-  const merged = [...guaranteed];
-  for (const item of aiResults) {
-    if (!seen.has(item.query)) {
-      seen.add(item.query);
-      merged.push(item);
-    }
-  }
+  // 병합 + 중복 제거
+  const seen = new Set<string>();
+  const all = [...guaranteed, ...aiResults].filter(item => {
+    if (seen.has(item.query)) return false;
+    seen.add(item.query);
+    return true;
+  });
 
-  return merged.slice(0, 12);
+  // confidence 순 정렬: high → medium → low
+  const order = { high: 0, medium: 1, low: 2 };
+  all.sort((a, b) => order[a.confidence] - order[b.confidence]);
+
+  return all.slice(0, 12);
 }
 
 /**
@@ -237,9 +239,18 @@ function extractGuaranteedQueries(context: SearchIntentContext): SearchIntentRes
     results.push({ query: q, confidence, reason });
   }
 
-  // H1 원문
+  // H1 원문 — 구체적 고유명사면 high, 단독 지역명이면 low
   if (context.h1 && context.h1.length >= 2 && context.h1.length <= 50) {
-    add(context.h1, 'high', 'H1 (대표 검색어)');
+    const isGenericLocation = /^[가-힣]{2,4}[동구시군면읍리]$/.test(context.h1)
+      || /^[가-힣]{2,6}(특별시|광역시|특별자치)$/.test(context.h1)
+      || /^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)$/.test(context.h1);
+
+    if (isGenericLocation) {
+      // 단독 지역명은 검색어로서 가치가 낮음 — 순위 하향
+      add(context.h1, 'low', 'H1 (지역명)');
+    } else {
+      add(context.h1, 'high', 'H1 (대표 검색어)');
+    }
   }
 
   // Title에서 고유명사 추출 (따옴표로 감싸진 텍스트, | 앞 핵심 텍스트)
