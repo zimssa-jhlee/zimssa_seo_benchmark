@@ -108,9 +108,10 @@ export async function startCrawl(sessionId: string, startUrl: string, options: C
       }
 
       const pageId = uuidv4();
+      let page: import('playwright').Page | null = null;
 
       try {
-        const page = await context.newPage();
+        page = await context.newPage();
 
         // Capture initial HTML (before JS rendering) for SSR/CSR detection
         let initialHtml = '';
@@ -130,7 +131,7 @@ export async function startCrawl(sessionId: string, startUrl: string, options: C
           if (normalizedUrl.startsWith('http://')) {
             const httpsUrl = normalizedUrl.replace('http://', 'https://');
             console.log(`[Crawl] Retrying with HTTPS: ${httpsUrl}`);
-            return page.goto(httpsUrl, { waitUntil: 'networkidle', timeout: 30000 });
+            return page!.goto(httpsUrl, { waitUntil: 'networkidle', timeout: 30000 });
           }
           throw err;
         });
@@ -225,8 +226,6 @@ export async function startCrawl(sessionId: string, startUrl: string, options: C
             }
           }
         }
-
-        await page.close();
       } catch (error: any) {
         insertPage({
           id: pageId,
@@ -242,6 +241,11 @@ export async function startCrawl(sessionId: string, startUrl: string, options: C
           sessionId,
           data: { url: normalizedUrl, error: error.message },
         });
+      } finally {
+        // Always close the page to prevent memory leaks and browser crashes
+        if (page) {
+          await page.close().catch(() => {});
+        }
       }
 
       // Rate limiting delay (1-2 seconds)
