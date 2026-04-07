@@ -224,7 +224,7 @@ export async function analyzeSearchIntent(context: SearchIntentContext): Promise
 }
 
 /**
- * 확실한 검색어 — H1 원문, 주소 패턴
+ * 확실한 검색어 — H1, title 내 고유명사, 주소 패턴
  */
 function extractGuaranteedQueries(context: SearchIntentContext): SearchIntentResult[] {
   const results: SearchIntentResult[] = [];
@@ -242,14 +242,43 @@ function extractGuaranteedQueries(context: SearchIntentContext): SearchIntentRes
     add(context.h1, 'high', 'H1 (대표 검색어)');
   }
 
+  // Title에서 고유명사 추출 (따옴표로 감싸진 텍스트, | 앞 핵심 텍스트)
+  if (context.title) {
+    // 따옴표/작은따옴표로 감싸진 고유명사: 'Brick Hands II', "삼성엑스포1단지" 등
+    const quotedNames = context.title.match(/[''"'"]([^''"'"]+)[''"'"]/g);
+    if (quotedNames) {
+      for (const match of quotedNames) {
+        const name = match.replace(/^[''"'"]+|[''"'"]+$/g, '').trim();
+        if (name.length >= 2 && name.length <= 40 && name !== context.h1) {
+          add(name, 'high', 'Title 내 고유명사');
+        }
+      }
+    }
+
+    // | 또는 - 구분자 앞에서 고유명사 추출 (영문 포함)
+    const beforeBrand = context.title.split(/\s*[|–—]\s*/)[0].trim();
+    // 영문으로 시작하는 고유명사 추출 (2단어 이상 영문)
+    const englishNames = beforeBrand.match(/[A-Za-z][A-Za-z\s]+(?:\s[IVX\d]+)?/g);
+    if (englishNames) {
+      for (const name of englishNames) {
+        const trimmed = name.trim();
+        if (trimmed.length >= 3 && !seen.has(trimmed)) {
+          add(trimmed, 'high', 'Title 내 영문 고유명사');
+        }
+      }
+    }
+  }
+
   // 주소 패턴 추출
   const textSources = [context.title, context.description].join(' ');
 
+  // 도로명 주소
   const roadAddresses = textSources.match(/[가-힣]+(?:로|길)\s*\d+(?:번길)?\s*\d+[-–]\d+/g);
   if (roadAddresses) {
     for (const addr of roadAddresses) add(addr.replace(/–/g, '-'), 'high', '도로명 주소');
   }
 
+  // 번지 주소
   const lotAddresses = textSources.match(/[가-힣]+동\s*\d+[-–]\d+/g);
   if (lotAddresses) {
     for (const addr of lotAddresses) add(addr.replace(/–/g, '-'), 'high', '지번 주소');
@@ -280,15 +309,14 @@ async function analyzeSearchIntentWithGemini(apiKey: string, context: SearchInte
 ## 분석 규칙
 
 ### 필수 포함 — 다양한 검색 패턴을 반영하세요:
-1. **H1 + 서비스 키워드 조합**: H1과 title에 명시된 서비스 키워드(시세, 매매, 후기 등)를 조합
-2. **지역 + 업종/카테고리 검색**: 지역 키워드 + 비즈니스 키워드 상위 항목 조합 (예: "전민동 아파트", "강남 피부과")
-   - 이런 검색어는 해당 지역의 해당 업종 페이지를 노출시키는 가장 일반적인 패턴임
-3. **H1의 핵심 고유명사 + 일반 검색어**: H1에서 고유명사만 추출하여 일반 검색 패턴과 조합 (예: "엑스포 아파트", "삼성 아파트")
-4. **사용자 의도 기반**: 정보 탐색, 비교, 후기 확인, 가격 확인 등 다양한 검색 의도 반영
+1. **Title 내 고유명사(상호명/건물명/브랜드명) 단독 및 조합**: Title에 따옴표로 감싸진 이름이나 영문 고유명사가 있으면 그것 자체가 검색어임 (예: Title에 "Brick Hands II"가 있으면 → "Brick Hands", "Brick Hands II" 등)
+2. **고유명사 + 서비스 키워드 조합**: 건물명/브랜드명 + 시세, 매매, 후기 등 (예: "Brick Hands II 실거래가")
+3. **지역 + 업종/카테고리 검색**: 지역 키워드 + 비즈니스 키워드 상위 항목 조합 (예: "전민동 아파트", "자양동 빌라")
+4. **고유명사의 축약/변형**: 사람들이 실제 검색할 때 쓰는 축약형 (예: "삼성엑스포1단지" → "엑스포 아파트")
+5. **사용자 의도 기반**: 정보 탐색, 비교, 후기 확인, 가격 확인 등
 
 ### 제외:
-- H1 원문 그대로 (이미 추출됨)
-- 주소 패턴 (이미 추출됨)
+- H1 원문 그대로, 주소 패턴, Title 내 따옴표 고유명사 (이미 추출됨)
 - title 전체 텍스트를 그대로 넣지 마세요
 
 ### 근거 규칙:
