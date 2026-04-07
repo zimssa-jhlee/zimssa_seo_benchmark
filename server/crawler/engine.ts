@@ -102,7 +102,7 @@ export async function startCrawl(sessionId: string, startUrl: string, options: C
 
       // Check robots.txt
       const urlPath = new URL(normalizedUrl).pathname;
-      if (!isPathAllowed(urlPath, robotsRules.disallowPaths)) {
+      if (!isPathAllowed(urlPath, robotsRules)) {
         console.log(`[Crawl] Skipped (robots.txt): ${normalizedUrl}`);
         continue;
       }
