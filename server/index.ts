@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { crawlRouter } from './routes/crawl.js';
 import { sessionsRouter } from './routes/sessions.js';

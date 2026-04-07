@@ -156,7 +156,7 @@ export async function startCrawl(sessionId: string, startUrl: string, options: C
           description: metadata.description.content,
           h1: h1Text,
           ogTitle: metadata.ogTags['og:title'] || '',
-        });
+        }, normalizedUrl);
 
         // Technical (once per domain)
         if (!domainTechnical) {

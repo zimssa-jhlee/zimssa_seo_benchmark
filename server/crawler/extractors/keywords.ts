@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
-import { isStopword, tokenizeKorean } from '../utils/stopwords.js';
+import { tokenizeKorean } from '../utils/stopwords.js';
+import { filterKeywords } from '../utils/keyword-filter.js';
 
 export interface KeywordsResult {
   targetKeywords: string[];
@@ -23,6 +24,7 @@ const VISIBLE_TEXT_SCRIPT = `(() => {
 export async function extractKeywords(
   page: Page,
   metadata: { title: string; description: string; h1: string; ogTitle: string },
+  pageUrl: string,
 ): Promise<KeywordsResult> {
   const visibleText: string = await page.evaluate(VISIBLE_TEXT_SCRIPT);
   const chars = visibleText.length;
@@ -35,16 +37,30 @@ export async function extractKeywords(
     freqMap.set(token, (freqMap.get(token) || 0) + 1);
   }
 
+  // Get top 40 candidates (more than needed, AI will trim)
   const sorted = [...freqMap.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 20);
+    .slice(0, 40);
+
+  // AI + rule-based filtering
+  const filtered = await filterKeywords(
+    sorted.map(([keyword, count]) => ({ keyword, count })),
+    {
+      url: pageUrl,
+      title: metadata.title,
+      description: metadata.description,
+    },
+  );
+
+  // Take top 20 after filtering
+  const top20 = filtered.slice(0, 20);
 
   const titleTokens = new Set(tokenizeKorean(metadata.title));
   const descTokens = new Set(tokenizeKorean(metadata.description));
   const h1Tokens = new Set(tokenizeKorean(metadata.h1));
   const ogTokens = new Set(tokenizeKorean(metadata.ogTitle));
 
-  const density = sorted.map(([keyword, count]) => ({
+  const density = top20.map(({ keyword, count }) => ({
     keyword,
     count,
     ratio: totalWords > 0 ? Math.round((count / totalWords) * 10000) / 100 : 0,
@@ -53,8 +69,8 @@ export async function extractKeywords(
     inH1: h1Tokens.has(keyword),
   }));
 
-  const targetKeywords = sorted
-    .map(([keyword]) => keyword)
+  const targetKeywords = top20
+    .map(({ keyword }) => keyword)
     .filter((keyword) => {
       let score = 0;
       if (titleTokens.has(keyword)) score++;
