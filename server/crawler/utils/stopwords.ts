@@ -159,9 +159,9 @@ export function tokenizeKorean(text: string): string[] {
   ]);
 
   for (const word of koreanWords) {
-    // 단위 명사로 시작하는 합성어 분리: "억광진구" → "광진구", "분도보" → "도보"
+    // 단위 명사로 시작하는 합성어를 반복 제거: "만원오피스텔" → "원오피스텔" → "오피스텔"
     let cleaned = word;
-    if (unitNouns.has(cleaned[0]) && cleaned.length >= 3) {
+    while (cleaned.length >= 3 && unitNouns.has(cleaned[0])) {
       cleaned = cleaned.slice(1);
     }
 

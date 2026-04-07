@@ -151,12 +151,13 @@ export async function startCrawl(sessionId: string, startUrl: string, options: C
 
         // Keywords need metadata results
         const h1Text = semantic.headings.find((h) => h.level === 1)?.text || '';
+        const jsonLdTypes = jsonLd.jsonLd.map(l => l.type);
         const keywords = await extractKeywords(page, {
           title: metadata.title.content,
           description: metadata.description.content,
           h1: h1Text,
           ogTitle: metadata.ogTags['og:title'] || '',
-        }, normalizedUrl);
+        }, normalizedUrl, jsonLdTypes);
 
         // Technical (once per domain)
         if (!domainTechnical) {

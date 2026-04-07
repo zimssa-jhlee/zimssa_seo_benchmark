@@ -1,9 +1,16 @@
 import type { Page } from 'playwright';
 import { tokenizeKorean } from '../utils/stopwords.js';
-import { filterKeywords } from '../utils/keyword-filter.js';
+import { filterKeywords, analyzeSearchIntent } from '../utils/keyword-filter.js';
+
+export interface SearchIntent {
+  query: string;
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
+}
 
 export interface KeywordsResult {
   targetKeywords: string[];
+  searchIntents: SearchIntent[];
   density: Array<{
     keyword: string;
     count: number;
@@ -25,6 +32,7 @@ export async function extractKeywords(
   page: Page,
   metadata: { title: string; description: string; h1: string; ogTitle: string },
   pageUrl: string,
+  jsonLdTypes?: string[],
 ): Promise<KeywordsResult> {
   const visibleText: string = await page.evaluate(VISIBLE_TEXT_SCRIPT);
   const chars = visibleText.length;
@@ -37,22 +45,15 @@ export async function extractKeywords(
     freqMap.set(token, (freqMap.get(token) || 0) + 1);
   }
 
-  // Get top 40 candidates (more than needed, AI will trim)
   const sorted = [...freqMap.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 40);
 
-  // AI + rule-based filtering
   const filtered = await filterKeywords(
     sorted.map(([keyword, count]) => ({ keyword, count })),
-    {
-      url: pageUrl,
-      title: metadata.title,
-      description: metadata.description,
-    },
+    { url: pageUrl, title: metadata.title, description: metadata.description },
   );
 
-  // Take top 20 after filtering
   const top20 = filtered.slice(0, 20);
 
   const titleTokens = new Set(tokenizeKorean(metadata.title));
@@ -80,8 +81,20 @@ export async function extractKeywords(
       return score >= 2;
     });
 
+  // Search intent analysis
+  const searchIntents = await analyzeSearchIntent({
+    url: pageUrl,
+    title: metadata.title,
+    description: metadata.description,
+    h1: metadata.h1,
+    ogTitle: metadata.ogTitle,
+    jsonLdTypes: jsonLdTypes || [],
+    topKeywords: top20.slice(0, 10).map(k => k.keyword),
+  });
+
   return {
     targetKeywords,
+    searchIntents,
     density,
     totalText: { chars, words: totalWords },
   };

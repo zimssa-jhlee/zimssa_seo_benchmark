@@ -168,3 +168,151 @@ function applyRuleBasedFilter(keywords: KeywordEntry[]): KeywordEntry[] {
     return true;
   });
 }
+
+/**
+ * 검색 노출 의도 분석 — 이 페이지가 어떤 검색어로 노출될 가능성이 높은지 추론
+ */
+export interface SearchIntentResult {
+  query: string;
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
+}
+
+export async function analyzeSearchIntent(context: {
+  url: string;
+  title: string;
+  description: string;
+  h1: string;
+  ogTitle: string;
+  jsonLdTypes: string[];
+  topKeywords: string[];
+}): Promise<SearchIntentResult[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (apiKey) {
+    try {
+      return await analyzeSearchIntentWithGemini(apiKey, context);
+    } catch (err: any) {
+      console.log(`[SearchIntent] Gemini failed, using rule-based: ${err.message}`);
+    }
+  }
+
+  return analyzeSearchIntentRuleBased(context);
+}
+
+async function analyzeSearchIntentWithGemini(apiKey: string, context: {
+  url: string; title: string; description: string; h1: string; ogTitle: string;
+  jsonLdTypes: string[]; topKeywords: string[];
+}): Promise<SearchIntentResult[]> {
+  const prompt = `당신은 SEO 검색 노출 분석 전문가입니다. 아래 웹페이지의 SEO 설정을 보고, 이 페이지가 어떤 검색어로 구글/네이버에 노출될 가능성이 높은지 분석해주세요.
+
+URL: ${context.url}
+Title: ${context.title}
+Description: ${context.description}
+H1: ${context.h1}
+OG Title: ${context.ogTitle}
+JSON-LD 타입: ${context.jsonLdTypes.join(', ') || '없음'}
+주요 키워드: ${context.topKeywords.join(', ')}
+
+## 분석 기준
+1. Title과 H1에 공통으로 들어간 핵심 키워드 조합
+2. Description에서 강조하는 정보
+3. JSON-LD 구조화 데이터가 암시하는 검색 의도
+4. 사용자가 실제로 검색할 법한 자연어 쿼리
+
+## 응답 형식 (JSON 배열, 최대 8개)
+[
+  {"query": "검색어 예시", "confidence": "high|medium|low", "reason": "이유 (15자 이내)"},
+  ...
+]
+
+confidence 기준:
+- high: title+h1+description에 직접적으로 포함된 키워드 조합
+- medium: description이나 콘텐츠에서 추론 가능한 검색어
+- low: 연관 키워드로 간접 노출 가능한 검색어
+
+JSON만 출력하세요. 설명 없이.`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 500 },
+    }),
+  });
+
+  if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+  // Parse JSON from response (handle markdown code blocks)
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) return analyzeSearchIntentRuleBased(context);
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return parsed.filter((item: any) =>
+      item.query && item.confidence && item.reason
+    ).slice(0, 8);
+  } catch {
+    return analyzeSearchIntentRuleBased(context);
+  }
+}
+
+function analyzeSearchIntentRuleBased(context: {
+  url: string; title: string; description: string; h1: string; ogTitle: string;
+  jsonLdTypes: string[]; topKeywords: string[];
+}): SearchIntentResult[] {
+  const results: SearchIntentResult[] = [];
+
+  // H1 자체가 가장 강력한 검색 의도 신호
+  if (context.h1 && context.h1.length > 1) {
+    results.push({ query: context.h1, confidence: 'high', reason: 'H1 태그 직접 매칭' });
+  }
+
+  // Title에서 | 또는 - 앞부분 (주요 키워드)
+  if (context.title) {
+    const mainTitle = context.title.split(/[|\-–—]/)[0].trim();
+    if (mainTitle && mainTitle !== context.h1) {
+      results.push({ query: mainTitle, confidence: 'high', reason: 'Title 태그 핵심부' });
+    }
+  }
+
+  // Top keywords 조합 (상위 2-3개)
+  if (context.topKeywords.length >= 2) {
+    const combo = context.topKeywords.slice(0, 3).join(' ');
+    results.push({ query: combo, confidence: 'medium', reason: '고빈도 키워드 조합' });
+  }
+
+  // JSON-LD 기반 추론
+  if (context.jsonLdTypes.includes('LocalBusiness') || context.jsonLdTypes.includes('House')) {
+    // 부동산/로컬 비즈니스 → 지역명 + 서비스 검색
+    const locationWords = context.topKeywords.filter(k =>
+      /[동구시군면읍리]$/.test(k) || /[역]$/.test(k)
+    );
+    if (locationWords.length > 0) {
+      results.push({ query: `${locationWords[0]} 후기`, confidence: 'medium', reason: 'JSON-LD 지역 비즈니스' });
+      results.push({ query: `${locationWords[0]} 시세`, confidence: 'medium', reason: 'JSON-LD 지역 비즈니스' });
+    }
+  }
+
+  if (context.jsonLdTypes.includes('FAQPage')) {
+    results.push({ query: `${context.topKeywords[0] || ''} 자주 묻는 질문`, confidence: 'low', reason: 'FAQ 구조화 데이터' });
+  }
+
+  // Description에서 핵심 구문 추출
+  if (context.description) {
+    const desc = context.description;
+    // "~의 월세, 전세, 매매" 패턴
+    const priceMatch = desc.match(/(.{2,10})의?\s*(월세|전세|매매|시세|가격)/);
+    if (priceMatch) {
+      results.push({ query: `${priceMatch[1]} ${priceMatch[2]}`, confidence: 'medium', reason: 'Description 가격 패턴' });
+    }
+  }
+
+  return results.slice(0, 8);
+}
+
