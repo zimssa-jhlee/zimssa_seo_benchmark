@@ -231,7 +231,7 @@ function SinglePageReport({ page, session }: { page: any; session: any }) {
       {/* Score radar + Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card
-          title="SEO 설정 완성도 레이더"
+          title="SEO 설정 완성도"
           subtitle="각 항목별 달성률 (%)"
           delay={0.2}
         >
@@ -498,8 +498,11 @@ function SinglePageReport({ page, session }: { page: any; session: any }) {
 
       {/* CTA */}
       {data.content?.ctaButtons?.length > 0 && (
-        <Card title="CTA 버튼 텍스트" delay={0.56}>
-          <InfoTooltip text="사용자 행동을 유도하는 버튼 텍스트입니다. 경쟁사의 전환 유도 전략을 파악할 수 있습니다" />
+        <Card
+          title="CTA 버튼 텍스트"
+          delay={0.56}
+          infoTooltip="사용자 행동을 유도하는 버튼 텍스트입니다. 경쟁사의 전환 유도 전략을 파악할 수 있습니다"
+        >
           <div className="flex flex-wrap gap-2 mt-3">
             {data.content.ctaButtons.map((cta: string, i: number) => (
               <span
