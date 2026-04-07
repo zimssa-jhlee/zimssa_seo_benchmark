@@ -16,9 +16,15 @@ export async function extractContent(page: Page, pageUrl: string): Promise<Conte
 
     const ctaPatterns = /문의|상담|신청|견적|예약|시작|가입|구매|주문|다운로드|체험|무료|지금|바로/;
     const ctaButtons = [];
+    var seenCta = new Set();
     document.querySelectorAll('button, a[role="button"], [class*="btn"], [class*="cta"]').forEach(el => {
-      const text = (el.textContent || '').trim().slice(0, 100);
-      if (text && ctaPatterns.test(text)) ctaButtons.push(text);
+      var clone = el.cloneNode(true);
+      clone.querySelectorAll('img, svg, picture, source').forEach(function(c) { c.remove(); });
+      var text = (clone.textContent || '').replace(/\\s+/g, ' ').trim();
+      if (text && text.length >= 2 && text.length <= 30 && ctaPatterns.test(text) && !seenCta.has(text)) {
+        seenCta.add(text);
+        ctaButtons.push(text);
+      }
     });
 
     const internalLinkTargets = [];

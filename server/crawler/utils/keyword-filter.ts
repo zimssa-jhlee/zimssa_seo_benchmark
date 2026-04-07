@@ -229,41 +229,54 @@ export async function analyzeSearchIntent(context: SearchIntentContext): Promise
  */
 function extractGuaranteedQueries(context: SearchIntentContext): SearchIntentResult[] {
   const results: SearchIntentResult[] = [];
+  const seen = new Set<string>();
 
-  // H1 원문 — 가장 강력한 신호. 주소, 상호명 등 그대로 검색됨
-  if (context.h1 && context.h1.length >= 2 && context.h1.length <= 60) {
-    results.push({ query: context.h1, confidence: 'high', reason: 'H1 태그 (대표 검색어)' });
+  function add(query: string, confidence: SearchIntentResult['confidence'], reason: string) {
+    const q = query.trim();
+    if (q.length < 2 || q.length > 50 || seen.has(q)) return;
+    seen.add(q);
+    results.push({ query: q, confidence, reason });
   }
 
-  // Title에서 | 또는 - 기준 앞부분 (브랜드명 제외한 핵심)
+  // H1 원문 — 가장 강력한 검색어 (단지명, 상호명, 주소)
+  if (context.h1 && context.h1.length >= 2 && context.h1.length <= 50) {
+    add(context.h1, 'high', 'H1 (대표 검색어)');
+  }
+
+  // Title + Description에서 주소 패턴 추출
+  const textSources = [context.title, context.description].join(' ');
+
+  // 도로명 주소: "OO로OO길 00-00" 또는 "OO로 00-00"
+  const roadAddresses = textSources.match(/[가-힣]+(?:로|길)\s*\d+(?:번길)?\s*\d+[-–]\d+/g);
+  if (roadAddresses) {
+    for (const addr of roadAddresses) add(addr.replace(/–/g, '-'), 'high', '도로명 주소');
+  }
+
+  // 번지 주소: "OO동 00-00"
+  const lotAddresses = textSources.match(/[가-힣]+동\s*\d+[-–]\d+/g);
+  if (lotAddresses) {
+    for (const addr of lotAddresses) add(addr.replace(/–/g, '-'), 'high', '지번 주소');
+  }
+
+  // Title에서 브랜드/서비스 핵심 키워드 추출 (쉼표, 괄호로 분리)
   if (context.title) {
-    const parts = context.title.split(/\s*[|–—]\s*/);
-    const mainPart = parts[0].trim();
-    // H1과 다를 때만 추가 (중복 방지)
-    if (mainPart && mainPart !== context.h1 && mainPart.length <= 80) {
-      results.push({ query: mainPart, confidence: 'high', reason: 'Title 핵심부' });
-    }
+    // | 뒤는 브랜드명이므로 제거
+    const beforeBrand = context.title.split(/\s*[|]\s*/)[0];
+    // 괄호 내용 제거하고 쉼표로 분리
+    const withoutParens = beforeBrand.replace(/\([^)]*\)/g, '').replace(/\([^)]*\)/g, '');
+    const segments = withoutParens.split(/[,，、]/);
 
-    // Title에서 쉼표로 구분된 키워드들 → 각각 독립 검색어
-    // "서울 광진구 자양동 227-155 자양번영로11길 15-3(자양번영로11길 15-3) 거주 후기, 실거래가, 시세"
-    // → "자양번영로11길 15-3" 같은 주소 패턴 추출
-    const addressPatterns = context.title.match(/[가-힣]+\d+[가-힣]*\s*\d+[-–]\d+/g);
-    if (addressPatterns) {
-      for (const addr of addressPatterns) {
-        const trimmed = addr.trim();
-        if (trimmed !== context.h1 && !results.some(r => r.query === trimmed)) {
-          results.push({ query: trimmed, confidence: 'high', reason: 'Title 내 주소 패턴' });
-        }
-      }
-    }
-
-    // "OO동 123-45" 패턴 (번지 주소)
-    const lotPatterns = context.title.match(/[가-힣]+동\s*\d+[-–]\d+/g);
-    if (lotPatterns) {
-      for (const lot of lotPatterns) {
-        const trimmed = lot.trim();
-        if (!results.some(r => r.query === trimmed)) {
-          results.push({ query: trimmed, confidence: 'high', reason: 'Title 내 번지 주소' });
+    for (const seg of segments) {
+      const cleaned = seg.trim().replace(/^[''""]|[''""]$/g, '');
+      // 너무 길면(30자 초과) 스킵 — 이건 문장이지 검색어가 아님
+      if (cleaned.length > 30) continue;
+      // H1과 동일하면 스킵
+      if (cleaned === context.h1) continue;
+      // 짧은 서비스 키워드 (후기, 시세, 모집공고 등)
+      if (cleaned.length >= 2 && cleaned.length <= 15) {
+        // H1 + 이 키워드 조합이 실제 검색어
+        if (context.h1) {
+          add(`${context.h1} ${cleaned}`, 'high', 'H1 + 서비스 키워드');
         }
       }
     }
