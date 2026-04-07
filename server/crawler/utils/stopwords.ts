@@ -142,11 +142,28 @@ function looksLikeVerbalEnding(word: string): boolean {
 export function tokenizeKorean(text: string): string[] {
   const tokens: string[] = [];
 
+  // 전처리: 숫자+한글 합성어를 분리
+  // "3억광진구" → "3억 광진구", "5분도보" → "5분 도보", "227호" → "227 호"
+  const preprocessed = text
+    .replace(/(\d+)([가-힣])/g, '$1 $2')  // 숫자 뒤 한글 → 공백 삽입
+    .replace(/([가-힣])(\d+)/g, '$1 $2'); // 한글 뒤 숫자 → 공백 삽입
+
   // 한글 단어 추출 (2글자 이상 연속 한글)
-  const koreanWords = text.match(/[가-힣]{2,}/g) || [];
+  const koreanWords = preprocessed.match(/[가-힣]{2,}/g) || [];
+
+  // 단위 명사 (숫자 뒤에 붙는 1글자 한글 — 이미 분리했으므로 제거 대상)
+  const unitNouns = new Set([
+    '억', '만', '천', '백', '십', '원', '호', '층', '동', '번',
+    '분', '초', '시', '년', '월', '일', '개', '명', '건', '대',
+    '평', '㎡', '실', '세', '배', '곳', '채', '석', '위',
+  ]);
 
   for (const word of koreanWords) {
+    // 단위 명사로 시작하는 합성어 분리: "억광진구" → "광진구", "분도보" → "도보"
     let cleaned = word;
+    if (unitNouns.has(cleaned[0]) && cleaned.length >= 3) {
+      cleaned = cleaned.slice(1);
+    }
 
     // 다단계 접미 제거 (최대 2번)
     for (let pass = 0; pass < 2; pass++) {
