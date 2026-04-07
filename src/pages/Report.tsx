@@ -377,12 +377,12 @@ function KeywordsTab({ summary, pages }: { summary: any; pages: any[] }) {
       )}
 
       <Card title="키워드 빈도 분포" subtitle="전체 페이지 합산 기준 상위 20개" delay={0.2}>
-        <div className="h-80">
+        <div style={{ height: Math.max(320, chartData.length * 32) }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+            <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} />
-              <YAxis dataKey="keyword" type="category" tick={{ fontSize: 12, fill: '#334155' }} width={80} />
+              <YAxis dataKey="keyword" type="category" tick={{ fontSize: 12, fill: '#334155' }} width={90} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="count" fill="#6366F1" radius={[0, 6, 6, 0]} maxBarSize={20} />
             </BarChart>

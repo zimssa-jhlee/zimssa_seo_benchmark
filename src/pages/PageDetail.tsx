@@ -73,7 +73,7 @@ export default function PageDetail() {
       </div>
 
       {/* Metadata */}
-      <Card title="메타데이터" delay={0.2}>
+      <Card title="기본 메타 태그" subtitle="검색엔진이 페이지를 이해하는 데 사용하는 핵심 태그" delay={0.2}>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-1">
           <MetaItem label="Title" value={data.metadata?.title?.content} badge={`${data.metadata?.title?.length}자`} />
           <MetaItem label="Description" value={data.metadata?.description?.content} badge={`${data.metadata?.description?.length}자`} />
@@ -82,29 +82,68 @@ export default function PageDetail() {
           <MetaItem label="Viewport" value={data.metadata?.viewport} />
           <MetaItem label="Keywords" value={data.metadata?.keywords} />
         </div>
-
-        {/* OG / Twitter / Verification in collapsible sections */}
-        {data.metadata?.ogTags && Object.keys(data.metadata.ogTags).length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 mb-2">Open Graph</p>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-1">
-              {Object.entries(data.metadata.ogTags).map(([k, v]) => (
-                <MetaItem key={k} label={k} value={v as string} />
-              ))}
-            </div>
-          </div>
-        )}
-        {data.metadata?.twitterTags && Object.keys(data.metadata.twitterTags).length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 mb-2">Twitter Card</p>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-1">
-              {Object.entries(data.metadata.twitterTags).map(([k, v]) => (
-                <MetaItem key={k} label={k} value={v as string} />
-              ))}
-            </div>
-          </div>
-        )}
       </Card>
+
+      {/* OG + Twitter side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card delay={0.23}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.989C18.343 21.129 22 16.99 22 12c0-5.523-4.477-10-10-10z" /></svg>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900">Open Graph</h4>
+              <InfoTooltip text="페이스북, 카카오톡 등에 링크 공유 시 표시되는 제목, 설명, 이미지를 지정하는 태그입니다" />
+            </div>
+          </div>
+          {data.metadata?.ogTags && Object.keys(data.metadata.ogTags).length > 0 ? (
+            <div className="space-y-0.5">
+              {Object.entries(data.metadata.ogTags).map(([k, v]) => (
+                <MetaItem key={k} label={k.replace('og:', '')} value={v as string} />
+              ))}
+            </div>
+          ) : <EmptyState text="Open Graph 태그가 설정되지 않았습니다" />}
+        </Card>
+
+        <Card delay={0.26}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-sky-500" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900">Twitter Card</h4>
+              <InfoTooltip text="X(구 트위터)에 링크 공유 시 표시되는 카드 형태를 지정하는 태그입니다" />
+            </div>
+          </div>
+          {data.metadata?.twitterTags && Object.keys(data.metadata.twitterTags).length > 0 ? (
+            <div className="space-y-0.5">
+              {Object.entries(data.metadata.twitterTags).map(([k, v]) => (
+                <MetaItem key={k} label={k.replace('twitter:', '')} value={v as string} />
+              ))}
+            </div>
+          ) : <EmptyState text="Twitter Card 태그가 설정되지 않았습니다" />}
+        </Card>
+      </div>
+
+      {/* Verification tags */}
+      {data.metadata?.verificationTags && Object.keys(data.metadata.verificationTags).length > 0 && (
+        <Card delay={0.28}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900">검색엔진 인증</h4>
+              <InfoTooltip text="네이버, 구글 등 검색엔진에 사이트 소유권을 인증하는 태그입니다. Search Console 등록에 필요합니다." />
+            </div>
+          </div>
+          <div className="space-y-0.5">
+            {Object.entries(data.metadata.verificationTags).map(([k, v]) => (
+              <MetaItem key={k} label={k} value={v as string} />
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* JSON-LD + Headings side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -141,21 +180,25 @@ export default function PageDetail() {
       </div>
 
       {/* Keywords chart */}
-      {data.keywords?.density?.length > 0 && (
-        <Card title="키워드 밀도" subtitle={`총 ${data.keywords.totalText?.chars?.toLocaleString()}자 · ${data.keywords.totalText?.words?.toLocaleString()}단어`} delay={0.47}>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.keywords.density.slice(0, 15)} layout="vertical" margin={{ left: 20, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} />
-                <YAxis dataKey="keyword" type="category" tick={{ fontSize: 12, fill: '#334155' }} width={70} />
-                <Tooltip formatter={(value: any) => [`${value}회`, '빈도']} />
-                <Bar dataKey="count" fill="#6366F1" radius={[0, 6, 6, 0]} maxBarSize={18} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      )}
+      {data.keywords?.density?.length > 0 && (() => {
+        const kwData = data.keywords.density.slice(0, 15);
+        const chartHeight = Math.max(280, kwData.length * 32);
+        return (
+          <Card title="키워드 밀도" subtitle={`총 ${data.keywords.totalText?.chars?.toLocaleString()}자 · ${data.keywords.totalText?.words?.toLocaleString()}단어`} delay={0.47}>
+            <div style={{ height: chartHeight }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={kwData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }} barCategoryGap="20%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} />
+                  <YAxis dataKey="keyword" type="category" tick={{ fontSize: 12, fill: '#334155' }} width={90} />
+                  <Tooltip formatter={(value: any) => [`${value}회`, '빈도']} />
+                  <Bar dataKey="count" fill="#6366F1" radius={[0, 6, 6, 0]} maxBarSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* CTA buttons */}
       {data.content?.ctaButtons?.length > 0 && (
@@ -231,5 +274,28 @@ function StatCard({ label, items, delay }: { label: string; items: Array<{ name:
         ))}
       </div>
     </Card>
+  );
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative group/tip inline-flex ml-1">
+      <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] bg-gray-100 text-gray-400 rounded-full cursor-help hover:bg-gray-200 transition-colors">?</span>
+      <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-[11px] leading-relaxed rounded-xl opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none whitespace-normal w-56 text-center z-50 shadow-lg">
+        {text}
+        <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-gray-900" />
+      </span>
+    </span>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-2 py-4 px-3 bg-gray-50 rounded-xl">
+      <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+      </svg>
+      <span className="text-xs text-gray-400">{text}</span>
+    </div>
   );
 }
