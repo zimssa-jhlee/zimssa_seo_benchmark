@@ -462,45 +462,49 @@ function SinglePageReport({ page, session }: { page: any; session: any }) {
         </Card>
       </div>
 
-      {/* Keywords */}
-      {kwData.length > 0 && (
-        <Card
-          title="키워드 빈도 분포"
-          subtitle={`본문 ${data.keywords?.totalText?.chars?.toLocaleString()}자 기준 상위 키워드`}
-          delay={0.45}
-        >
-          <div style={{ height: kwChartHeight }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={kwData}
-                layout="vertical"
-                margin={{ left: 10, right: 20, top: 5, bottom: 5 }}
-                barCategoryGap="20%"
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="#F1F5F9"
-                  horizontal={false}
-                />
-                <XAxis type="number" tick={{ fontSize: 11, fill: "#94A3B8" }} />
-                <YAxis
-                  dataKey="keyword"
-                  type="category"
-                  tick={{ fontSize: 12, fill: "#334155" }}
-                  width={90}
-                />
-                <Tooltip formatter={(v: any) => [`${v}회`, "빈도"]} />
-                <Bar
-                  dataKey="count"
-                  fill="#6366F1"
-                  radius={[0, 6, 6, 0]}
-                  maxBarSize={20}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      )}
+      {/* Keywords — location + business separated */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Location keywords (compact) */}
+        {(data.keywords?.locationKeywords?.length > 0) && (
+          <Card title="타겟 지역" delay={0.44}
+            infoTooltip="이 페이지가 타겟하는 지역/주소 키워드입니다. 행정구역, 도로명, 동/리 등">
+            <div className="space-y-2">
+              {data.keywords.locationKeywords.map((kw: any, i: number) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                    <span className="text-sm text-gray-800">{kw.keyword}</span>
+                  </div>
+                  <span className="text-xs text-gray-400">{kw.count}회</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Business keywords (chart) */}
+        {kwData.length > 0 && (
+          <Card
+            title="비즈니스 키워드 빈도"
+            subtitle={`본문 ${data.keywords?.totalText?.chars?.toLocaleString()}자 기준`}
+            className={data.keywords?.locationKeywords?.length > 0 ? 'lg:col-span-2' : 'lg:col-span-3'}
+            delay={0.46}
+            infoTooltip="지역/주소 키워드를 제외한 서비스·상품 관련 핵심 키워드의 출현 빈도입니다"
+          >
+            <div style={{ height: kwChartHeight }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={kwData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }} barCategoryGap="20%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} />
+                  <YAxis dataKey="keyword" type="category" tick={{ fontSize: 12, fill: '#334155' }} width={90} />
+                  <Tooltip formatter={(v: any) => [`${v}회`, '빈도']} />
+                  <Bar dataKey="count" fill="#6366F1" radius={[0, 6, 6, 0]} maxBarSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        )}
+      </div>
 
       {/* Links & Content stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
