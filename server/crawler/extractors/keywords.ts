@@ -123,7 +123,7 @@ export async function extractKeywords(
       return score >= 2;
     });
 
-  // Search intent analysis
+  // Search intent analysis — pass rich context
   const searchIntents = await analyzeSearchIntent({
     url: pageUrl,
     title: metadata.title,
@@ -132,6 +132,7 @@ export async function extractKeywords(
     ogTitle: metadata.ogTitle,
     jsonLdTypes: jsonLdTypes || [],
     topKeywords: businessKeywords.slice(0, 10).map(k => k.keyword),
+    locationKeywords: locationKeywords.slice(0, 5).map(k => k.keyword),
   });
 
   return {

@@ -14,14 +14,15 @@ export async function extractContent(page: Page, pageUrl: string): Promise<Conte
     const imageCount = document.querySelectorAll('img').length;
     const videoCount = document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"]').length;
 
-    const ctaPatterns = /문의|상담|신청|견적|예약|시작|가입|구매|주문|다운로드|체험|무료|지금|바로/;
+    const ctaPatterns = /문의|상담|신청|견적|예약|시작|가입|구매|주문|다운로드|체험|무료|바로|알림받기|발급|비교견적|앱\s*열기/;
+    var ctaExclude = /더보기|닫기|취소|확인$|^확인하기$|이전|다음|^보기$/;
     const ctaButtons = [];
     var seenCta = new Set();
     document.querySelectorAll('button, a[role="button"], [class*="btn"], [class*="cta"]').forEach(el => {
       var clone = el.cloneNode(true);
       clone.querySelectorAll('img, svg, picture, source').forEach(function(c) { c.remove(); });
       var text = (clone.textContent || '').replace(/\\s+/g, ' ').trim();
-      if (text && text.length >= 2 && text.length <= 30 && ctaPatterns.test(text) && !seenCta.has(text)) {
+      if (text && text.length >= 2 && text.length <= 30 && ctaPatterns.test(text) && !ctaExclude.test(text) && !seenCta.has(text)) {
         seenCta.add(text);
         ctaButtons.push(text);
       }

@@ -186,14 +186,15 @@ type SearchIntentContext = {
   h1: string;
   ogTitle: string;
   jsonLdTypes: string[];
-  topKeywords: string[];
+  topKeywords: string[];     // 비즈니스 키워드
+  locationKeywords?: string[]; // 지역 키워드
 };
 
 export async function analyzeSearchIntent(context: SearchIntentContext): Promise<SearchIntentResult[]> {
-  // 1단계: 규칙 기반으로 확실한 검색어를 먼저 추출 (H1, title 원문 등)
+  // 1단계: 규칙 기반 확실한 검색어 (H1, 주소 패턴)
   const guaranteed = extractGuaranteedQueries(context);
 
-  // 2단계: AI로 추가 검색어 추론
+  // 2단계: AI로 실사용자 검색 패턴 추론
   const apiKey = process.env.GEMINI_API_KEY;
   let aiResults: SearchIntentResult[] = [];
 
@@ -205,12 +206,11 @@ export async function analyzeSearchIntent(context: SearchIntentContext): Promise
     }
   }
 
-  // AI 결과가 없으면 규칙 기반 추가 추론
   if (aiResults.length === 0) {
     aiResults = inferAdditionalQueries(context);
   }
 
-  // 병합: guaranteed를 최상위에, AI 결과에서 중복 제거 후 추가
+  // 병합: guaranteed 최상위, AI 중복 제거 후 추가
   const seen = new Set(guaranteed.map(g => g.query));
   const merged = [...guaranteed];
   for (const item of aiResults) {
@@ -220,12 +220,11 @@ export async function analyzeSearchIntent(context: SearchIntentContext): Promise
     }
   }
 
-  return merged.slice(0, 10);
+  return merged.slice(0, 12);
 }
 
 /**
- * 확실한 검색어 — H1 원문, title 핵심부를 있는 그대로 최상위에
- * 사용자는 주소, 상호명, 상품명을 그대로 검색하는 경우가 가장 많음
+ * 확실한 검색어 — H1 원문, 주소 패턴
  */
 function extractGuaranteedQueries(context: SearchIntentContext): SearchIntentResult[] {
   const results: SearchIntentResult[] = [];
@@ -238,81 +237,76 @@ function extractGuaranteedQueries(context: SearchIntentContext): SearchIntentRes
     results.push({ query: q, confidence, reason });
   }
 
-  // H1 원문 — 가장 강력한 검색어 (단지명, 상호명, 주소)
+  // H1 원문
   if (context.h1 && context.h1.length >= 2 && context.h1.length <= 50) {
     add(context.h1, 'high', 'H1 (대표 검색어)');
   }
 
-  // Title + Description에서 주소 패턴 추출
+  // 주소 패턴 추출
   const textSources = [context.title, context.description].join(' ');
 
-  // 도로명 주소: "OO로OO길 00-00" 또는 "OO로 00-00"
   const roadAddresses = textSources.match(/[가-힣]+(?:로|길)\s*\d+(?:번길)?\s*\d+[-–]\d+/g);
   if (roadAddresses) {
     for (const addr of roadAddresses) add(addr.replace(/–/g, '-'), 'high', '도로명 주소');
   }
 
-  // 번지 주소: "OO동 00-00"
   const lotAddresses = textSources.match(/[가-힣]+동\s*\d+[-–]\d+/g);
   if (lotAddresses) {
     for (const addr of lotAddresses) add(addr.replace(/–/g, '-'), 'high', '지번 주소');
-  }
-
-  // Title에서 브랜드/서비스 핵심 키워드 추출 (쉼표, 괄호로 분리)
-  if (context.title) {
-    // | 뒤는 브랜드명이므로 제거
-    const beforeBrand = context.title.split(/\s*[|]\s*/)[0];
-    // 괄호 내용 제거하고 쉼표로 분리
-    const withoutParens = beforeBrand.replace(/\([^)]*\)/g, '').replace(/\([^)]*\)/g, '');
-    const segments = withoutParens.split(/[,，、]/);
-
-    for (const seg of segments) {
-      const cleaned = seg.trim().replace(/^[''""]|[''""]$/g, '');
-      // 너무 길면(30자 초과) 스킵 — 이건 문장이지 검색어가 아님
-      if (cleaned.length > 30) continue;
-      // H1과 동일하면 스킵
-      if (cleaned === context.h1) continue;
-      // 짧은 서비스 키워드 (후기, 시세, 모집공고 등)
-      if (cleaned.length >= 2 && cleaned.length <= 15) {
-        // H1 + 이 키워드 조합이 실제 검색어
-        if (context.h1) {
-          add(`${context.h1} ${cleaned}`, 'high', 'H1 + 서비스 키워드');
-        }
-      }
-    }
   }
 
   return results;
 }
 
 async function analyzeSearchIntentWithGemini(apiKey: string, context: SearchIntentContext): Promise<SearchIntentResult[]> {
+  const locationStr = context.locationKeywords?.join(', ') || '없음';
+  const businessStr = context.topKeywords.join(', ') || '없음';
+
   const prompt = `당신은 SEO 검색 노출 분석 전문가입니다.
 
-아래 웹페이지 정보를 보고, 사용자가 구글/네이버에서 어떤 검색어를 입력했을 때 이 페이지가 검색 결과에 노출될 가능성이 높은지 분석해주세요.
+아래 웹페이지의 SEO 데이터와 콘텐츠 키워드를 종합 분석하여, 실제 사용자가 구글/네이버에서 어떤 검색어를 입력했을 때 이 페이지가 검색 결과에 노출될 가능성이 높은지 추론해주세요.
 
-URL: ${context.url}
-Title: ${context.title}
-H1: ${context.h1}
-Description: ${context.description}
-JSON-LD 타입: ${context.jsonLdTypes.join(', ') || '없음'}
-주요 키워드: ${context.topKeywords.join(', ')}
+## 페이지 SEO 데이터
+- URL: ${context.url}
+- Title: ${context.title}
+- H1: ${context.h1}
+- Description: ${context.description}
+- JSON-LD 타입: ${context.jsonLdTypes.join(', ') || '없음'}
 
-## 중요 규칙
-1. H1과 Title에 이미 있는 원문 텍스트(주소, 상호명 등)는 제가 이미 추출했으므로 **중복 제출하지 마세요**
-2. 사용자가 **실제로 검색창에 입력할 법한 자연어 쿼리**만 제출하세요
-3. Title/Description의 핵심 키워드를 **다양한 조합**으로 제시하세요
-4. 해당 페이지가 **어떤 검색 의도**에 부합하는지 고려하세요 (정보 탐색, 비교, 후기 확인 등)
+## 콘텐츠 키워드 분석 결과
+- 지역 키워드 (고빈도): ${locationStr}
+- 비즈니스 키워드 (고빈도): ${businessStr}
 
-## 응답 형식 (JSON 배열, 5~7개)
+## 분석 규칙
+
+### 필수 포함 — 다양한 검색 패턴을 반영하세요:
+1. **H1 + 서비스 키워드 조합**: H1과 title에 명시된 서비스 키워드(시세, 매매, 후기 등)를 조합
+2. **지역 + 업종/카테고리 검색**: 지역 키워드 + 비즈니스 키워드 상위 항목 조합 (예: "전민동 아파트", "강남 피부과")
+   - 이런 검색어는 해당 지역의 해당 업종 페이지를 노출시키는 가장 일반적인 패턴임
+3. **H1의 핵심 고유명사 + 일반 검색어**: H1에서 고유명사만 추출하여 일반 검색 패턴과 조합 (예: "엑스포 아파트", "삼성 아파트")
+4. **사용자 의도 기반**: 정보 탐색, 비교, 후기 확인, 가격 확인 등 다양한 검색 의도 반영
+
+### 제외:
+- H1 원문 그대로 (이미 추출됨)
+- 주소 패턴 (이미 추출됨)
+- title 전체 텍스트를 그대로 넣지 마세요
+
+### 근거 규칙:
+- 모든 검색어는 **페이지의 SEO 데이터 또는 콘텐츠 키워드에 근거**해야 합니다
+- 페이지에 없는 키워드를 임의로 조합하지 마세요
+- "지역 + 업종" 조합은 해당 지역과 업종이 모두 페이지 데이터에 존재할 때만 가능
+
+## 응답 형식 (JSON 배열, 8~12개)
 [
-  {"query": "실제 검색어", "confidence": "high|medium|low", "reason": "이유 10자 이내"}
+  {"query": "검색어", "confidence": "high|medium|low", "reason": "근거 10자 이내"}
 ]
 
-- high: title/description 키워드 직접 조합
-- medium: 콘텐츠 맥락에서 추론한 검색어
-- low: 간접적으로 연관된 검색어
+confidence 기준:
+- high: title/h1/description 키워드의 직접 조합
+- medium: 콘텐츠 키워드 기반 추론 (지역+업종, 고유명사 축약형 등)
+- low: 간접적으로 연관된 검색 의도
 
-JSON 배열만 출력. 다른 텍스트 없이.`;
+JSON 배열만 출력.`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
   const response = await fetch(url, {
@@ -320,7 +314,7 @@ JSON 배열만 출력. 다른 텍스트 없이.`;
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.15, maxOutputTokens: 400 },
+      generationConfig: { temperature: 0.2, maxOutputTokens: 600 },
     }),
   });
 
@@ -334,44 +328,60 @@ JSON 배열만 출력. 다른 텍스트 없이.`;
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    return parsed.filter((item: any) => item.query && item.confidence && item.reason).slice(0, 7);
+    return parsed.filter((item: any) => item.query && item.confidence && item.reason).slice(0, 12);
   } catch {
     return [];
   }
 }
 
 /**
- * AI 없을 때 추가 검색어 추론 (규칙 기반)
+ * AI 없을 때 규칙 기반 추론 — 지역+업종, H1+서비스 조합
  */
 function inferAdditionalQueries(context: SearchIntentContext): SearchIntentResult[] {
   const results: SearchIntentResult[] = [];
+  const locations = context.locationKeywords || [];
+  const keywords = context.topKeywords;
 
-  // 키워드 조합
-  if (context.topKeywords.length >= 2) {
-    results.push({ query: context.topKeywords.slice(0, 3).join(' '), confidence: 'medium', reason: '고빈도 키워드 조합' });
-  }
+  // H1 + 서비스 키워드 조합 (title에서 추출)
+  if (context.h1 && context.title) {
+    const beforeBrand = context.title.split(/\s*[|]\s*/)[0];
+    const withoutParens = beforeBrand.replace(/\([^)]*\)/g, '');
+    const segments = withoutParens.split(/[,，、]/).map(s => s.trim().replace(/^[''""]|[''""]$/g, ''));
 
-  // JSON-LD 기반
-  if (context.jsonLdTypes.includes('LocalBusiness') || context.jsonLdTypes.includes('House') || context.jsonLdTypes.includes('RealEstateListing')) {
-    const locationWords = context.topKeywords.filter(k => /[동구시군면읍리역]$/.test(k));
-    if (locationWords.length > 0) {
-      results.push({ query: `${locationWords[0]} 후기`, confidence: 'medium', reason: '지역 + 후기 검색' });
-      results.push({ query: `${locationWords[0]} 시세`, confidence: 'medium', reason: '지역 + 시세 검색' });
-      results.push({ query: `${locationWords[0]} 전세`, confidence: 'low', reason: '지역 + 거래 유형' });
+    for (const seg of segments) {
+      if (seg.length >= 2 && seg.length <= 10 && seg !== context.h1) {
+        results.push({ query: `${context.h1} ${seg}`, confidence: 'high', reason: 'H1 + 서비스 키워드' });
+      }
     }
   }
 
-  if (context.jsonLdTypes.includes('FAQPage') && context.topKeywords[0]) {
-    results.push({ query: `${context.topKeywords[0]} 자주 묻는 질문`, confidence: 'low', reason: 'FAQ 구조화 데이터' });
+  // 지역 + 비즈니스 키워드 조합 (가장 중요한 거시적 패턴)
+  if (locations.length > 0 && keywords.length > 0) {
+    // 첫 번째 지역 + 주요 비즈니스 키워드
+    const mainLocation = locations[0];
+    for (const kw of keywords.slice(0, 3)) {
+      results.push({ query: `${mainLocation} ${kw}`, confidence: 'medium', reason: '지역 + 업종 검색' });
+    }
   }
 
-  if (context.jsonLdTypes.includes('MedicalClinic') && context.topKeywords.length >= 2) {
-    results.push({ query: `${context.topKeywords[0]} ${context.topKeywords[1]} 가격`, confidence: 'medium', reason: '의료 + 가격 검색' });
+  // JSON-LD 기반 추가
+  if (locations.length > 0) {
+    const loc = locations[0];
+    if (context.jsonLdTypes.some(t => ['LocalBusiness', 'House', 'ApartmentComplex', 'RealEstateListing'].includes(t))) {
+      results.push({ query: `${loc} 후기`, confidence: 'medium', reason: '지역 + 후기' });
+      results.push({ query: `${loc} 시세`, confidence: 'medium', reason: '지역 + 시세' });
+    }
+    if (context.jsonLdTypes.includes('MedicalClinic')) {
+      results.push({ query: `${loc} 병원`, confidence: 'medium', reason: '지역 + 업종' });
+    }
+    if (context.jsonLdTypes.includes('FAQPage') && keywords[0]) {
+      results.push({ query: `${keywords[0]} 자주 묻는 질문`, confidence: 'low', reason: 'FAQ 데이터' });
+    }
   }
 
   // Description 패턴
   if (context.description) {
-    const priceMatch = context.description.match(/(.{2,15})의?\s*(월세|전세|매매|시세|가격|실거래)/);
+    const priceMatch = context.description.match(/(.{2,12})의?\s*(월세|전세|매매|시세|가격|실거래)/);
     if (priceMatch) {
       results.push({ query: `${priceMatch[1]} ${priceMatch[2]}`, confidence: 'medium', reason: 'Description 패턴' });
     }
