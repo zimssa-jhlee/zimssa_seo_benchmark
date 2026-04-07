@@ -64,17 +64,18 @@ async function filterWithGemini(
 응답 형식: 쉼표로 구분된 키워드만 (설명 없이)
 예: 아파트, 강남구, 전세, 시세, 래미안`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
-      }),
-    },
-  );
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`;
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
+  });
+
+  // Retry once on 429 (rate limit)
+  let response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+  if (response.status === 429) {
+    await new Promise(r => setTimeout(r, 3000));
+    response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+  }
 
   if (!response.ok) {
     throw new Error(`Gemini API error: ${response.status}`);
