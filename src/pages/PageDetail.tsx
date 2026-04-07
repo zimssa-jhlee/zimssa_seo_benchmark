@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import ScoreCard from '../components/ScoreCard';
+import { motion } from 'framer-motion';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import Card from '../components/Card';
 import JsonLdViewer from '../components/JsonLdViewer';
 import HeadingTree from '../components/HeadingTree';
 
@@ -11,197 +13,223 @@ export default function PageDetail() {
 
   useEffect(() => {
     fetch(`/api/reports/${sessionId}/pages/${pageId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setPage(data);
-        setLoading(false);
-      });
+      .then(r => r.json())
+      .then(data => { setPage(data); setLoading(false); });
   }, [sessionId, pageId]);
 
-  if (loading) return <div className="text-center py-12 text-gray-500">로딩 중...</div>;
-  if (!page?.seo_data) return <div className="text-center py-12 text-gray-500">데이터가 없습니다.</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+  if (!page?.seo_data) return <div className="text-center py-12 text-gray-400">데이터가 없습니다.</div>;
 
   const { seo_data: data } = page;
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
-        <Link to={`/report/${sessionId}`} className="text-sm text-blue-600 hover:underline">&larr; 보고서로 돌아가기</Link>
-        <h2 className="text-lg font-bold text-gray-900 mt-2 break-all">{page.url}</h2>
-        <div className="flex gap-3 mt-1 text-sm text-gray-500">
-          <span>유형: {page.page_type || '기타'}</span>
-          <span>깊이: {page.depth}</span>
+        <Link to={`/report/${sessionId}`} className="text-xs text-gray-400 hover:text-indigo-500 transition-colors">&larr; 보고서</Link>
+        <h1 className="text-lg font-bold text-gray-900 mt-1 break-all">{page.url}</h1>
+        <div className="flex gap-3 mt-1">
+          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md">{page.page_type || '기타'}</span>
+          <span className="text-xs text-gray-400">깊이 {page.depth}</span>
         </div>
       </div>
 
-      <ScoreCard score={data.score || 0} breakdown={data.scoreBreakdown} />
-
-      {/* Metadata */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">메타데이터</h3>
-        <table className="w-full text-sm">
-          <tbody className="divide-y divide-gray-100">
-            <MetaRow label="Title" value={data.metadata?.title?.content} sub={`${data.metadata?.title?.length}자`} />
-            <MetaRow label="Description" value={data.metadata?.description?.content} sub={`${data.metadata?.description?.length}자`} />
-            <MetaRow label="Keywords" value={data.metadata?.keywords} />
-            <MetaRow label="Canonical" value={data.metadata?.canonical} />
-            <MetaRow label="Robots" value={data.metadata?.robots} />
-            <MetaRow label="Viewport" value={data.metadata?.viewport} />
-          </tbody>
-        </table>
-
-        {data.metadata?.ogTags && Object.keys(data.metadata.ogTags).length > 0 && (
-          <>
-            <h4 className="font-medium text-gray-900 mt-6 mb-2">Open Graph</h4>
-            <table className="w-full text-sm">
-              <tbody className="divide-y divide-gray-100">
-                {Object.entries(data.metadata.ogTags).map(([key, value]) => (
-                  <MetaRow key={key} label={key} value={value as string} />
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
-
-        {data.metadata?.twitterTags && Object.keys(data.metadata.twitterTags).length > 0 && (
-          <>
-            <h4 className="font-medium text-gray-900 mt-6 mb-2">Twitter Card</h4>
-            <table className="w-full text-sm">
-              <tbody className="divide-y divide-gray-100">
-                {Object.entries(data.metadata.twitterTags).map(([key, value]) => (
-                  <MetaRow key={key} label={key} value={value as string} />
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
-
-        {data.metadata?.verificationTags && Object.keys(data.metadata.verificationTags).length > 0 && (
-          <>
-            <h4 className="font-medium text-gray-900 mt-6 mb-2">검색엔진 인증</h4>
-            <table className="w-full text-sm">
-              <tbody className="divide-y divide-gray-100">
-                {Object.entries(data.metadata.verificationTags).map(([key, value]) => (
-                  <MetaRow key={key} label={key} value={value as string} />
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
-      </div>
-
-      {/* JSON-LD */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">구조화 데이터 (JSON-LD)</h3>
-        <JsonLdViewer data={data.structuredData?.jsonLd || []} />
-      </div>
-
-      {/* Heading structure */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Heading 구조</h3>
-        <HeadingTree headings={data.semantic?.headings || []} />
-      </div>
-
-      {/* Semantic tags */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">시맨틱 태그 사용</h3>
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-          {['nav', 'main', 'article', 'section', 'aside', 'footer', 'header'].map((tag) => (
-            <div key={tag} className="text-center p-3 bg-gray-50 rounded-lg">
-              <div className="text-lg font-bold text-gray-900">{data.semantic?.semanticTags?.[tag] || 0}</div>
-              <div className="text-xs text-gray-600 font-mono">&lt;{tag}&gt;</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Links & Images */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">링크 분석</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-600">내부 링크</span><span className="font-medium">{data.semantic?.links?.internal || 0}</span></div>
-            <div className="flex justify-between"><span className="text-gray-600">외부 링크</span><span className="font-medium">{data.semantic?.links?.external || 0}</span></div>
-            <div className="flex justify-between"><span className="text-gray-600">nofollow</span><span className="font-medium">{data.semantic?.links?.nofollow || 0}</span></div>
+      {/* Score + Breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Big radial score */}
+        <Card delay={0.1} className="flex items-center justify-center">
+          <div className="text-center py-4">
+            <RadialScore score={data.score || 0} />
+            <h3 className="text-sm font-semibold text-gray-900 mt-3">SEO 설정 완성도</h3>
+            <p className="text-[11px] text-gray-400 mt-0.5">설정 항목의 구현 현황 수치</p>
           </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">이미지 분석</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-600">전체 이미지</span><span className="font-medium">{data.semantic?.images?.total || 0}</span></div>
-            <div className="flex justify-between"><span className="text-gray-600">Alt 있음</span><span className="font-medium">{data.semantic?.images?.withAlt || 0}</span></div>
-            <div className="flex justify-between"><span className="text-gray-600">Alt 비율</span><span className="font-medium">{Math.round((data.semantic?.images?.altRatio || 0) * 100)}%</span></div>
-          </div>
-        </div>
-      </div>
+        </Card>
 
-      {/* Keywords */}
-      {data.keywords?.density?.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">키워드 밀도</h3>
-          <p className="text-sm text-gray-500 mb-4">총 {data.keywords.totalText?.chars?.toLocaleString()}자, {data.keywords.totalText?.words?.toLocaleString()}단어</p>
-          <div className="space-y-2">
-            {data.keywords.density.slice(0, 20).map((kw: any, i: number) => (
-              <div key={i} className="flex items-center gap-3 text-sm">
-                <span className="w-20 text-right text-gray-700 truncate">{kw.keyword}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-5">
-                  <div
-                    className="bg-blue-500 h-5 rounded-full flex items-center justify-end pr-2"
-                    style={{ width: `${Math.min(kw.ratio * 10, 100)}%`, minWidth: '2rem' }}
-                  >
-                    <span className="text-[10px] text-white">{kw.ratio}%</span>
-                  </div>
+        {/* Breakdown bars */}
+        <Card title="항목별 점수" className="lg:col-span-2" delay={0.15}>
+          <div className="space-y-3">
+            {(data.scoreBreakdown || []).map((item: any, i: number) => (
+              <div key={item.name} className="flex items-center gap-3">
+                <span className="text-xs text-gray-500 w-28 truncate">{ITEM_LABELS[item.name] || item.name}</span>
+                <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ backgroundColor: item.score / item.maxScore >= 0.8 ? '#22C55E' : item.score / item.maxScore >= 0.5 ? '#F59E0B' : '#EF4444' }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(item.score / item.maxScore) * 100}%` }}
+                    transition={{ duration: 0.5, delay: 0.2 + i * 0.04 }}
+                  />
                 </div>
-                <span className="text-xs text-gray-500 w-12">{kw.count}회</span>
+                <span className="text-xs font-semibold text-gray-600 w-14 text-right">{item.score}/{item.maxScore}</span>
+                <span className="text-[11px] text-gray-400 w-20 truncate">{item.details}</span>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        </Card>
+      </div>
 
-      {/* Content analysis */}
-      {data.content && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">콘텐츠 분석</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <Stat label="이미지" value={data.content.imageCount} />
-            <Stat label="비디오" value={data.content.videoCount} />
-            <Stat label="CTA 버튼" value={data.content.ctaButtons?.length || 0} />
-            <Stat label="내부 링크 대상" value={data.content.internalLinkTargets?.length || 0} />
+      {/* Metadata */}
+      <Card title="메타데이터" delay={0.2}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-1">
+          <MetaItem label="Title" value={data.metadata?.title?.content} badge={`${data.metadata?.title?.length}자`} />
+          <MetaItem label="Description" value={data.metadata?.description?.content} badge={`${data.metadata?.description?.length}자`} />
+          <MetaItem label="Canonical" value={data.metadata?.canonical} />
+          <MetaItem label="Robots" value={data.metadata?.robots} />
+          <MetaItem label="Viewport" value={data.metadata?.viewport} />
+          <MetaItem label="Keywords" value={data.metadata?.keywords} />
+        </div>
+
+        {/* OG / Twitter / Verification in collapsible sections */}
+        {data.metadata?.ogTags && Object.keys(data.metadata.ogTags).length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 mb-2">Open Graph</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-1">
+              {Object.entries(data.metadata.ogTags).map(([k, v]) => (
+                <MetaItem key={k} label={k} value={v as string} />
+              ))}
+            </div>
           </div>
-          {data.content.ctaButtons?.length > 0 && (
-            <>
-              <h4 className="font-medium text-gray-900 mb-2">CTA 텍스트</h4>
-              <div className="flex flex-wrap gap-2">
-                {data.content.ctaButtons.map((cta: string, i: number) => (
-                  <span key={i} className="px-3 py-1 bg-orange-50 text-orange-700 rounded-full text-sm">{cta}</span>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        )}
+        {data.metadata?.twitterTags && Object.keys(data.metadata.twitterTags).length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 mb-2">Twitter Card</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-1">
+              {Object.entries(data.metadata.twitterTags).map(([k, v]) => (
+                <MetaItem key={k} label={k} value={v as string} />
+              ))}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* JSON-LD + Headings side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card title="구조화 데이터 (JSON-LD)" delay={0.25}>
+          <JsonLdViewer data={data.structuredData?.jsonLd || []} />
+        </Card>
+        <Card title="Heading 구조" delay={0.3}>
+          <HeadingTree headings={data.semantic?.headings || []} />
+        </Card>
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="시맨틱 태그" items={
+          ['nav', 'main', 'article', 'section', 'aside', 'footer', 'header']
+            .map(tag => ({ name: `<${tag}>`, value: data.semantic?.semanticTags?.[tag] || 0 }))
+            .filter(i => i.value > 0)
+        } delay={0.35} />
+        <StatCard label="링크" items={[
+          { name: '내부', value: data.semantic?.links?.internal || 0 },
+          { name: '외부', value: data.semantic?.links?.external || 0 },
+          { name: 'nofollow', value: data.semantic?.links?.nofollow || 0 },
+        ]} delay={0.38} />
+        <StatCard label="이미지" items={[
+          { name: '전체', value: data.semantic?.images?.total || 0 },
+          { name: 'Alt 있음', value: data.semantic?.images?.withAlt || 0 },
+          { name: 'Alt 비율', value: `${Math.round((data.semantic?.images?.altRatio || 0) * 100)}%` },
+        ]} delay={0.41} />
+        <StatCard label="콘텐츠" items={[
+          { name: '이미지', value: data.content?.imageCount || 0 },
+          { name: '비디오', value: data.content?.videoCount || 0 },
+          { name: 'CTA', value: data.content?.ctaButtons?.length || 0 },
+        ]} delay={0.44} />
+      </div>
+
+      {/* Keywords chart */}
+      {data.keywords?.density?.length > 0 && (
+        <Card title="키워드 밀도" subtitle={`총 ${data.keywords.totalText?.chars?.toLocaleString()}자 · ${data.keywords.totalText?.words?.toLocaleString()}단어`} delay={0.47}>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.keywords.density.slice(0, 15)} layout="vertical" margin={{ left: 20, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} />
+                <YAxis dataKey="keyword" type="category" tick={{ fontSize: 12, fill: '#334155' }} width={70} />
+                <Tooltip formatter={(value: any) => [`${value}회`, '빈도']} />
+                <Bar dataKey="count" fill="#6366F1" radius={[0, 6, 6, 0]} maxBarSize={18} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
+
+      {/* CTA buttons */}
+      {data.content?.ctaButtons?.length > 0 && (
+        <Card title="CTA 버튼 텍스트" delay={0.5}>
+          <div className="flex flex-wrap gap-2">
+            {data.content.ctaButtons.map((cta: string, i: number) => (
+              <span key={i} className="text-sm px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg">{cta}</span>
+            ))}
+          </div>
+        </Card>
       )}
     </div>
   );
 }
 
-function MetaRow({ label, value, sub }: { label: string; value?: string; sub?: string }) {
+/* =========== HELPERS =========== */
+const ITEM_LABELS: Record<string, string> = {
+  title: 'Title 태그', description: 'Meta Description', canonical: 'Canonical URL',
+  ogTags: 'OG 태그', jsonLd: 'JSON-LD', h1: 'H1 태그',
+  imageAlt: '이미지 Alt', semanticTags: '시맨틱 태그', robotsTxt: 'robots.txt', sitemap: 'sitemap.xml',
+};
+
+function RadialScore({ score }: { score: number }) {
+  const size = 120;
+  const strokeWidth = 8;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (score / 100) * circumference;
+  const color = score >= 80 ? '#22C55E' : score >= 50 ? '#F59E0B' : '#EF4444';
+
   return (
-    <tr>
-      <td className="py-2 pr-4 text-gray-600 whitespace-nowrap w-40">{label}</td>
-      <td className="py-2 text-gray-900 break-all">
-        {value || <span className="text-gray-400">-</span>}
-        {sub && <span className="ml-2 text-xs text-gray-400">({sub})</span>}
-      </td>
-    </tr>
+    <div className="relative inline-flex" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#F1F5F9" strokeWidth={strokeWidth} />
+        <motion.circle
+          cx={size/2} cy={size/2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth}
+          strokeLinecap="round" strokeDasharray={circumference}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-3xl font-bold text-gray-900">{score}</span>
+        <span className="text-[11px] text-gray-400">/100</span>
+      </div>
+    </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function MetaItem({ label, value, badge }: { label: string; value?: string; badge?: string }) {
   return (
-    <div className="text-center p-3 bg-gray-50 rounded-lg">
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
-      <div className="text-sm text-gray-600">{label}</div>
+    <div className="flex items-start gap-2 py-2 border-b border-gray-50 last:border-0">
+      <span className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{label}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-gray-800 break-all">{value || <span className="text-gray-300">-</span>}</p>
+      </div>
+      {badge && <span className="text-[11px] text-gray-400 flex-shrink-0">{badge}</span>}
     </div>
+  );
+}
+
+function StatCard({ label, items, delay }: { label: string; items: Array<{ name: string; value: any }>; delay: number }) {
+  return (
+    <Card delay={delay}>
+      <p className="text-xs font-semibold text-gray-500 mb-3">{label}</p>
+      <div className="space-y-2">
+        {items.map(item => (
+          <div key={item.name} className="flex items-center justify-between text-sm">
+            <span className="text-gray-500 text-xs">{item.name}</span>
+            <span className="font-semibold text-gray-900">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
