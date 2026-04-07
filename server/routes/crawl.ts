@@ -25,8 +25,8 @@ crawlRouter.post('/', (req, res) => {
   const sessionId = uuidv4();
   const domain = parsedUrl.hostname;
   const crawlOptions = {
-    depth: options?.depth ?? 2,
-    maxPages: options?.maxPages ?? 50,
+    depth: options?.depth ?? 0,
+    maxPages: options?.maxPages ?? 1,
   };
 
   createSession({ id: sessionId, domain, url, options: crawlOptions });
